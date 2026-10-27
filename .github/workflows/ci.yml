@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: rubocop.gemfile
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Set up latest Ruby
+      uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+      with:
+        ruby-version: ruby
+        bundler-cache: true
+
+    - name: Run RuboCop
+      run: bundle exec rubocop
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Ruby 2.3 - Rails 3.2-5.2
+          - ruby-version: '2.3'
+            rails-version: '3.2'
+          - ruby-version: '2.3'
+            rails-version: '4.2'
+          - ruby-version: '2.3'
+            rails-version: '5.2'
+
+          # Ruby 2.4 - Rails 3.x-5.2
+          - ruby-version: '2.4'
+            rails-version: '4.2'
+          - ruby-version: '2.4'
+            rails-version: '5.2'
+
+          # Ruby 2.5 - Rails 5.2-6.1
+          - ruby-version: '2.5'
+            rails-version: '5.2'
+          - ruby-version: '2.5'
+            rails-version: '6.0'
+          - ruby-version: '2.5'
+            rails-version: '6.1'
+
+          # Ruby 2.6 - Rails 5.2-6.1
+          - ruby-version: '2.6'
+            rails-version: '5.2'
+          - ruby-version: '2.6'
+            rails-version: '6.0'
+          - ruby-version: '2.6'
+            rails-version: '6.1'
+
+          # Ruby 2.7 - Rails 6.0-7.0
+          - ruby-version: '2.7'
+            rails-version: '6.0'
+          - ruby-version: '2.7'
+            rails-version: '6.1'
+          - ruby-version: '2.7'
+            rails-version: '7.0'
+
+          # Ruby 3.0 - Rails 6.1-7.1
+          - ruby-version: '3.0'
+            rails-version: '6.1'
+          - ruby-version: '3.0'
+            rails-version: '7.0'
+          - ruby-version: '3.0'
+            rails-version: '7.1'
+
+          # Ruby 3.1 - Rails 6.1-7.1
+          - ruby-version: '3.1'
+            rails-version: '6.1'
+          - ruby-version: '3.1'
+            rails-version: '7.0'
+          - ruby-version: '3.1'
+            rails-version: '7.1'
+
+          # Ruby 3.2 - Rails 7.0-8.1
+          - ruby-version: '3.2'
+            rails-version: '7.0'
+          - ruby-version: '3.2'
+            rails-version: '7.1'
+          - ruby-version: '3.2'
+            rails-version: '8.0'
+          - ruby-version: '3.2'
+            rails-version: '8.1'
+
+          # Ruby 3.3 - Rails 7.1-8.1
+          - ruby-version: '3.3'
+            rails-version: '7.1'
+          - ruby-version: '3.3'
+            rails-version: '7.2'
+          - ruby-version: '3.3'
+            rails-version: '8.0'
+          - ruby-version: '3.3'
+            rails-version: '8.1'
+
+          # Ruby 3.4 - Rails 7.0-8.1
+          - ruby-version: '3.4'
+            rails-version: '7.1'
+          - ruby-version: '3.4'
+            rails-version: '7.2'
+          - ruby-version: '3.4'
+            rails-version: '8.0'
+          - ruby-version: '3.4'
+            rails-version: '8.1'
+
+          # Ruby 4.0 - Rails 7.2-8.1
+          - ruby-version: '4.0'
+            rails-version: '7.2'
+          - ruby-version: '4.0'
+            rails-version: '8.0'
+          - ruby-version: '4.0'
+            rails-version: '8.1'
+
+          # Special Ruby versions
+          - ruby-version: 'head'
+            rails-version: '8.1'
+            continue-on-error: true
+          - ruby-version: 'truffleruby'
+            rails-version: '8.1'
+            continue-on-error: true
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Set RAILS_VERSION environment variable
+      run: echo "RAILS_VERSION=${{ matrix.rails-version }}" >> $GITHUB_ENV
+
+    - name: Set up Ruby ${{ matrix.ruby-version }}
+      uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+      with:
+        ruby-version: ${{ matrix.ruby-version }}
+        bundler-cache: true
+
+    - name: Run tests
+      run: bundle exec rake
+      continue-on-error: ${{ matrix.continue-on-error || false }}
+
+  test-rails51-without-request-store:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Set up Ruby 2.4
+      uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+      with:
+        ruby-version: '2.4'
+
+    - name: Run tests
+      env:
+        BUNDLE_GEMFILE: rails_5_1_without_request_store.gemfile
+      run: |
+        cat <<EOF > $BUNDLE_GEMFILE
+        source 'https://rubygems.org'
+        gem 'railties', '~> 5.1.0'
+        gem 'activesupport', '~> 5.1.0'
+        gemspec
+        EOF
+        EXPECT_MESSAGE="If you want to use gon with Rails versions prior to 5.2, please add \`gem 'request_store'\` to your Gemfile."
+
+        bundle install
+
+        if bundle exec ruby -e "require 'gon'" 2>error.log; then
+          echo "Test failed: Expected an error due to missing 'request_store' gem."
+          exit 1
+        elif grep -q "$EXPECT_MESSAGE" error.log; then
+          echo "Test passed: Error raised as expected due to missing 'request_store' gem."
+          exit 0
+        else
+          echo "Test failed: Unexpected error message."
+          cat error.log
+          exit 1
+        fi
+
+  test-multi-json-compatibility:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        multi-json-version:
+          - '1.20.1'
+          - '~> 1.21'
+
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      with:
+        persist-credentials: false
+
+    - name: Set up Ruby 3.2
+      uses: ruby/setup-ruby@14594264cd68ce8a2345dd349bc3d138a4ef85c8 # v1.327.0
+      with:
+        ruby-version: '3.2'
+
+    - name: Test multi_json ${{ matrix.multi-json-version }}
+      env:
+        BUNDLE_GEMFILE: multi_json_compat.gemfile
+        MULTI_JSON_VERSION: ${{ matrix.multi-json-version }}
+      run: |
+        cat <<EOF > $BUNDLE_GEMFILE
+        source 'https://rubygems.org'
+        gem 'multi_json', '$MULTI_JSON_VERSION'
+        gem 'oj'
+        gemspec
+        EOF
+        bundle install
+        bundle exec rspec --require ./spec/spec_helper spec/gon/json_dumper_spec.rb
